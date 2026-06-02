@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Calculator</title>
+  
+  <!-- PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+
+  <!-- Google Fonts for OnePlus style clean typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0b0c0e;
+      --display-text: #ffffff;
+      --expr-text: #85888c;
+      --btn-num-bg: #1c1d21;
+      --btn-num-text: #ffffff;
+      --btn-op-bg: #282a2e;
+      --btn-op-text: #ffffff;
+      --btn-accent-bg: #eb1c24; /* OnePlus Signature Red */
+      --btn-accent-text: #ffffff;
+      --font-family: 'Inter', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--display-text);
+      font-family: var(--font-family);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    /* DISPLAY SECTION */
+    .display-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: flex-end;
+      padding: 30px 24px;
+      min-height: 180px;
+    }
+
+    .expression-display {
+      font-size: 20px;
+      color: var(--expr-text);
+      word-wrap: break-word;
+      word-break: break-all;
+      text-align: right;
+      min-height: 24px;
+      margin-bottom: 8px;
+      font-weight: 300;
+      letter-spacing: 0.5px;
+    }
+
+    .result-display {
+      font-size: 56px;
+      font-weight: 400;
+      color: var(--display-text);
+      text-align: right;
+      width: 100%;
+      white-space: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none; /* Hide scrollbar for Firefox */
+    }
+    
+    .result-display::-webkit-scrollbar {
+      display: none; /* Hide scrollbar for Safari/Chrome */
+    }
+
+    /* KEYBOARD SECTION */
+    .keyboard {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      padding: 16px 20px 24px;
+      background-color: var(--bg-color);
+    }
+
+    .btn {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: none;
+      outline: none;
+      font-family: var(--font-family);
+      font-size: 26px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.1s, transform 0.05s;
+    }
+
+    /* Interactive press effect */
+    .btn:active {
+      transform: scale(0.92);
+      filter: brightness(1.2);
+    }
+
+    /* Button Colors styling */
+    .btn.number {
+      background-color: var(--btn-num-bg);
+      color: var(--btn-num-text);
+    }
+
+    .btn.operator {
+      background-color: var(--btn-op-bg);
+      color: var(--btn-op-text);
+    }
+
+    .btn.function {
+      background-color: var(--btn-op-bg);
+      color: var(--btn-op-text);
+    }
+
+    .btn.equals {
+      background-color: var(--btn-accent-bg);
+      color: var(--btn-accent-text);
+      font-size: 32px;
+    }
+
+    /* MAGIC REVEAL OVERLAY */
+    #magic-overlay {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(11, 12, 14, 0.96); /* Matches phone background */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    #magic-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .revealed-number {
+      font-size: 110px;
+      font-weight: 700;
+      color: var(--display-text);
+      text-align: center;
+      /* Offscreen starting state (thrown from top-right) */
+      transform: translate(150vw, -150vh) rotate(60deg) scale(0.2);
+      transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.15); /* Overshoot bounce */
+      filter: drop-shadow(0 15px 30px rgba(0,0,0,0.5));
+    }
+
+    #magic-overlay.visible .revealed-number {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+
+    /* Extra styling for OnePlus look */
+    .op-brand-dot {
+      color: var(--btn-accent-bg);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- DISPLAY -->
+  <div class="display-container">
+    <div class="expression-display" id="expression"></div>
+    <div class="result-display" id="result">0</div>
+  </div>
+
+  <!-- KEYBOARD -->
+  <div class="keyboard">
+    <!-- Row 1 -->
+    <button class="btn function" onclick="pressClear()">C</button>
+    <button class="btn function" onclick="pressBackspace()">⌫</button>
+    <button class="btn function" onclick="pressPercent()">%</button>
+    <button class="btn operator" onclick="pressOp('/')">÷</button>
+
+    <!-- Row 2 -->
+    <button class="btn number" onclick="pressNum('7')">7</button>
+    <button class="btn number" onclick="pressNum('8')">8</button>
+    <button class="btn number" onclick="pressNum('9')">9</button>
+    <button class="btn operator" onclick="pressOp('*')">×</button>
+
+    <!-- Row 3 -->
+    <button class="btn number" onclick="pressNum('4')">4</button>
+    <button class="btn number" onclick="pressNum('5')">5</button>
+    <button class="btn number" onclick="pressNum('6')">6</button>
+    <button class="btn operator" onclick="pressOp('-')">−</button>
+
+    <!-- Row 4 -->
+    <button class="btn number" onclick="pressNum('1')">1</button>
+    <button class="btn number" onclick="pressNum('2')">2</button>
+    <button class="btn number" onclick="pressNum('3')">3</button>
+    <button class="btn operator" onclick="pressOp('+')">+</button>
+
+    <!-- Row 5 -->
+    <button class="btn function" onclick="pressNegate()">+/-</button>
+    <button class="btn number" onclick="pressNum('0')">0</button>
+    <button class="btn number" onclick="pressNum('.')">.</button>
+    <button class="btn equals" onclick="pressEquals()">=</button>
+  </div>
+
+  <!-- REVEAL SCREEN -->
+  <div id="magic-overlay" onclick="dismissReveal()">
+    <div class="revealed-number" id="reveal-text">7</div>
+  </div>
+
+  <script>
+    // PWA Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.log('SW registration failed:', err);
+        });
+      });
+    }
+
+    // CALCULATOR STATE
+    let currentInput = '0';
+    let storedExpression = '';
+    let isEvaluated = false;
+
+    // MAGIC STATE
+    let magicPrediction = '7';
+    let magicPrimed = false;
+    let magicSequence = [];
+    const SECRET_PATTERN = ['/', '*', '-', '+'];
+    let motionTriggered = false;
+    let accelerometerGranted = false;
+
+    const exprEl = document.getElementById('expression');
+    const resultEl = document.getElementById('result');
+    const overlayEl = document.getElementById('magic-overlay');
+    const revealTextEl = document.getElementById('reveal-text');
+
+    // Vibration feedback helper (OnePlus style haptic feel)
+    function triggerHaptic() {
+      if (navigator.vibrate) {
+        navigator.vibrate(12);
+      }
+    }
+
+    // Dynamic text auto-scaler for display
+    function adjustDisplayFontSize() {
+      const len = resultEl.innerText.length;
+      if (len > 12) {
+        resultEl.style.fontSize = '32px';
+      } else if (len > 8) {
+        resultEl.style.fontSize = '42px';
+      } else {
+        resultEl.style.fontSize = '56px';
+      }
+    }
+
+    function updateDisplay() {
+      resultEl.innerText = formatNumber(currentInput);
+      exprEl.innerText = storedExpression;
+      adjustDisplayFontSize();
+    }
+
+    // Format numbers with thousands separators
+    function formatNumber(numStr) {
+      if (numStr === 'Error' || numStr === 'Infinity' || numStr === '-Infinity') return numStr;
+      
+      const parts = numStr.split('.');
+      let integerPart = parts[0];
+      const decimalPart = parts.length > 1 ? '.' + parts[1] : '';
+
+      // Add commas to integer part
+      integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return integerPart + decimalPart;
+    }
+
+    // BUTTON HANDLERS
+    function pressNum(num) {
+      triggerHaptic();
+      requestAccelerometerPermission(); // Subtle iOS request attempt on tap
+
+      if (isEvaluated) {
+        currentInput = num === '.' ? '0.' : num;
+        isEvaluated = false;
+      } else {
+        if (currentInput === '0' && num !== '.') {
+          currentInput = num;
+        } else {
+          if (num === '.' && currentInput.includes('.')) return; // Prevent double decimal
+          currentInput += num;
+        }
+      }
+      updateDisplay();
+    }
+
+    function pressOp(op) {
+      triggerHaptic();
+      requestAccelerometerPermission();
+      
+      // Track magic key sequence
+      trackMagicSequence(op);
+
+      if (isEvaluated) {
+        storedExpression = currentInput + ' ' + formatOpChar(op) + ' ';
+        isEvaluated = false;
+      } else {
+        if (currentInput === 'Error') return;
+        storedExpression += currentInput + ' ' + formatOpChar(op) + ' ';
+      }
+      currentInput = '0';
+      updateDisplay();
+    }
+
+    function formatOpChar(op) {
+      if (op === '/') return '÷';
+      if (op === '*') return '×';
+      if (op === '-') return '−';
+      return op;
+    }
+
+    function pressEquals() {
+      triggerHaptic();
+      requestAccelerometerPermission();
+      
+      if (storedExpression === '' || isEvaluated) return;
+
+      // Build complete formula to evaluate
+      let cleanExpr = storedExpression.replace(/÷/g, '/').replace(/×/g, '*').replace(/−/g, '-') + currentInput;
+      
+      // Remove trailing space/operator if expression is incomplete
+      try {
+        // Prevent division by zero visually
+        if (cleanExpr.includes('/0')) {
+          currentInput = 'Error';
+        } else {
+          // Standard JS math eval
+          let result = Function('"use strict";return (' + cleanExpr + ')')();
+          
+          // Format result (limit decimal places to avoid overflow)
+          if (!Number.isInteger(result)) {
+            result = parseFloat(result.toFixed(8));
+          }
+          currentInput = result.toString();
+        }
+      } catch (err) {
+        currentInput = 'Error';
+      }
+
+      storedExpression = '';
+      isEvaluated = true;
+      updateDisplay();
+    }
+
+    function pressClear() {
+      triggerHaptic();
+      requestAccelerometerPermission();
+      currentInput = '0';
+      storedExpression = '';
+      isEvaluated = false;
+      magicSequence = []; // Reset pattern tracker on manual clear
+      updateDisplay();
+    }
+
+    function pressBackspace() {
+      triggerHaptic();
+      requestAccelerometerPermission();
+      if (isEvaluated) {
+        pressClear();
+        return;
+      }
+      if (currentInput.length > 1) {
+        currentInput = currentInput.slice(0, -1);
+      } else {
+        currentInput = '0';
+      }
+      updateDisplay();
+    }
+
+    function pressPercent() {
+      triggerHaptic();
+      requestAccelerometerPermission();
+      let val = parseFloat(currentInput);
+      if (!isNaN(val)) {
+        currentInput = (val / 100).toString();
+        updateDisplay();
+      }
+    }
+
+    function pressNegate() {
+      triggerHaptic();
+      requestAccelerometerPermission();
+      if (currentInput === '0' || currentInput === 'Error') return;
+      if (currentInput.startsWith('-')) {
+        currentInput = currentInput.slice(1);
+      } else {
+        currentInput = '-' + currentInput;
+      }
+      updateDisplay();
+    }
+
+    // MAGIC LOGIC TRACKING
+    function trackMagicSequence(op) {
+      magicSequence.push(op);
+      
+      // Only keep the last N operators matching pattern length
+      if (magicSequence.length > SECRET_PATTERN.length) {
+        magicSequence.shift();
+      }
+
+      // Check if secret sequence matches
+      if (JSON.stringify(magicSequence) === JSON.stringify(SECRET_PATTERN)) {
+        // Activate Magic!
+        // Grab current typed value in calculator (or default to 7 if empty/0)
+        let parsedVal = parseFloat(currentInput.replace(/,/g, ''));
+        magicPrediction = (!isNaN(parsedVal) && parsedVal !== 0) ? currentInput : '7';
+        
+        // Prime the trick silently
+        magicPrimed = true;
+        motionTriggered = false;
+        
+        // Silently clear display to hide what just happened
+        currentInput = '0';
+        storedExpression = '';
+        magicSequence = [];
+        
+        // Update display silently (no haptics/sounds to indicate change)
+        setTimeout(() => {
+          updateDisplay();
+        }, 100);
+      }
+    }
+
+    // MOTION AND SENSORS (ACCELEROMETER)
+    const MOTION_THRESHOLD = 15; // Calibration trigger sensitivity
+    let lastX = null, lastY = null, lastZ = null;
+
+    function requestAccelerometerPermission() {
+      if (accelerometerGranted) return;
+
+      // iOS 13+ support
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission()
+          .then(permissionState => {
+            if (permissionState === 'granted') {
+              accelerometerGranted = true;
+              window.addEventListener('devicemotion', handleMotion);
+            }
+          })
+          .catch(console.error);
+      } else {
+        // Android or older browsers (standard device motion)
+        window.addEventListener('devicemotion', handleMotion);
+        accelerometerGranted = true;
+      }
+    }
+
+    function handleMotion(event) {
+      if (!magicPrimed || motionTriggered) return;
+
+      let acc = event.acceleration;
+      if (!acc || acc.x === null) {
+        // Fallback to accelerationIncludingGravity if standard is unavailable
+        acc = event.accelerationIncludingGravity;
+      }
+
+      if (!acc || acc.x === null) return;
+
+      let currentX = acc.x;
+      let currentY = acc.y;
+      let currentZ = acc.z;
+
+      if (lastX !== null) {
+        // Calculate rate of change of acceleration (jerk/shake)
+        let deltaX = Math.abs(currentX - lastX);
+        let deltaY = Math.abs(currentY - lastY);
+        let deltaZ = Math.abs(currentZ - lastZ);
+        
+        let totalChange = deltaX + deltaY + deltaZ;
+
+        if (totalChange > MOTION_THRESHOLD) {
+          // Phone movement detected!
+          triggerMagicCountdown();
+        }
+      }
+
+      lastX = currentX;
+      lastY = currentY;
+      lastZ = currentZ;
+    }
+
+    // Fallback: shake simulator for testing inside browser console
+    window.simulateShake = function() {
+      if (magicPrimed && !motionTriggered) {
+        triggerMagicCountdown();
+      }
+    }
+
+    function triggerMagicCountdown() {
+      motionTriggered = true;
+      magicPrimed = false; // Disable further motion triggers
+      
+      // Start 3 second countdown silently
+      setTimeout(() => {
+        revealMagicPrediction();
+      }, 3000);
+    }
+
+    function revealMagicPrediction() {
+      // Set value inside reveal element
+      revealTextEl.innerText = magicPrediction;
+      
+      // Make overlay visible to trigger CSS fly-in animation
+      overlayEl.classList.add('visible');
+      
+      // Vibrate phone once heavily on reveal (if supported)
+      if (navigator.vibrate) {
+        navigator.vibrate([100, 50, 100]);
+      }
+    }
+
+    function dismissReveal() {
+      // Silently dismiss
+      overlayEl.classList.remove('visible');
+      
+      // Reset variables so it is completely clean
+      magicPrimed = false;
+      motionTriggered = false;
+      currentInput = '0';
+      storedExpression = '';
+      updateDisplay();
+    }
+  </script>
+</body>
+</html>
