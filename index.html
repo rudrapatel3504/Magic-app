@@ -81,19 +81,28 @@
       white-space: nowrap;
     }
     
-    /* Result text transitions directly inside the calculator screen */
     #result {
       display: inline-block;
-      transition: transform 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.12), opacity 0.65s ease;
-      transform: translateX(0);
-      opacity: 1;
     }
 
-    /* Secretly moves it off-screen to the left instantly before sliding in */
-    #result.slide-out {
-      transform: translateX(-100vw);
+    #magic-part {
+      display: inline-block;
+      max-width: 0;
       opacity: 0;
-      transition: none !important;
+      transform: translateX(-80px);
+      transition: max-width 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.12), 
+                  transform 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.12), 
+                  opacity 0.65s ease;
+      overflow: hidden;
+      white-space: nowrap;
+      vertical-align: bottom;
+      color: var(--display-text);
+    }
+
+    #magic-part.show-magic {
+      max-width: 250px;
+      opacity: 1;
+      transform: translateX(0);
     }
 
     /* KEYBOARD SECTION */
@@ -255,7 +264,7 @@
   <div class="display-container">
     <div class="expression-display" id="expression"></div>
     <div class="result-display">
-      <span id="result">0</span>
+      <span id="magic-part"></span><span id="result">0</span>
     </div>
   </div>
 
@@ -354,22 +363,36 @@
     const exprEl = document.getElementById('expression');
     const resultEl = document.getElementById('result');
 
-    // Vibration feedback helper (OnePlus style haptic feel)
+    // Vibration feedback helper (OnePlus style haptic feel) and magic UI cleanup
     function triggerHaptic() {
       if (navigator.vibrate) {
         navigator.vibrate(12);
+      }
+      cleanupMagicReveal();
+    }
+
+    function cleanupMagicReveal() {
+      const magicPartEl = document.getElementById('magic-part');
+      const typedPartEl = document.getElementById('result');
+      if (magicPartEl && magicPartEl.classList.contains('show-magic')) {
+        magicPartEl.classList.remove('show-magic');
+        magicPartEl.innerText = '';
+        typedPartEl.innerText = formatNumber(currentInput);
+        adjustDisplayFontSize();
       }
     }
 
     // Dynamic text auto-scaler for display
     function adjustDisplayFontSize() {
-      const len = resultEl.innerText.length;
-      if (len > 12) {
-        resultEl.style.fontSize = '32px';
-      } else if (len > 8) {
-        resultEl.style.fontSize = '42px';
+      const magicPartEl = document.getElementById('magic-part');
+      const totalLen = ((magicPartEl ? magicPartEl.innerText : '') + resultEl.innerText).length;
+      const displayEl = document.querySelector('.result-display');
+      if (totalLen > 12) {
+        displayEl.style.fontSize = '32px';
+      } else if (totalLen > 8) {
+        displayEl.style.fontSize = '42px';
       } else {
-        resultEl.style.fontSize = '56px';
+        displayEl.style.fontSize = '56px';
       }
     }
 
@@ -638,30 +661,29 @@
     }
 
     function revealMagicPrediction() {
-      // Concatenate prediction to current input
-      if (currentInput === '0' || currentInput === 'Error') {
-        currentInput = magicPrediction;
-      } else {
-        currentInput = magicPrediction + currentInput;
-      }
-      isEvaluated = true; // Ready for subsequent calculations
+      const magicPartEl = document.getElementById('magic-part');
+      const typedPartEl = document.getElementById('result');
 
       // Vibrate phone heavily on reveal (if supported)
       if (navigator.vibrate) {
         navigator.vibrate([100, 50, 100]);
       }
 
-      // Slide result off-screen to the right instantly
-      resultEl.classList.add('slide-out');
+      // Concatenate prediction to current input
+      if (currentInput === '0' || currentInput === 'Error') {
+        typedPartEl.innerText = ''; // Clear typed part
+        currentInput = magicPrediction;
+      } else {
+        currentInput = magicPrediction + currentInput;
+      }
+      isEvaluated = true; // Ready for subsequent calculations
+
+      // Update text in magic part
+      magicPartEl.innerText = formatNumber(magicPrediction);
       
-      // Force layout recalculation
-      resultEl.offsetHeight; 
-      
-      // Update result display text and fonts
-      updateDisplay();
-      
-      // Remove class to animate sliding back in from right to left
-      resultEl.classList.remove('slide-out');
+      // Animate the magic part in
+      magicPartEl.classList.add('show-magic');
+      adjustDisplayFontSize();
     }
 
     // SETTINGS OVERLAY LOGIC
