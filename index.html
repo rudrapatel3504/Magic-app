@@ -638,8 +638,12 @@
     }
 
     function revealMagicPrediction() {
-      // Set current input state directly in the calculator
-      currentInput = magicPrediction;
+      // Concatenate prediction to current input
+      if (currentInput === '0' || currentInput === 'Error') {
+        currentInput = magicPrediction;
+      } else {
+        currentInput = magicPrediction + currentInput;
+      }
       isEvaluated = true; // Ready for subsequent calculations
 
       // Vibrate phone heavily on reveal (if supported)
