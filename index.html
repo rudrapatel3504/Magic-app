@@ -147,6 +147,106 @@
       color: var(--btn-accent-text);
       font-size: 32px;
     }
+
+    /* HIDDEN SETTINGS OVERLAY */
+    #settings-overlay {
+      position: fixed;
+      inset: 0;
+      background-color: #0b0c0e;
+      color: #ffffff;
+      z-index: 2000;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100vh);
+      transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+      overflow-y: auto;
+    }
+
+    #settings-overlay.visible {
+      transform: translateY(0);
+    }
+
+    .settings-title {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: var(--display-text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .settings-group {
+      margin-bottom: 24px;
+      background-color: #1c1d21;
+      padding: 18px;
+      border-radius: 16px;
+      border: 1px solid #2d2e33;
+    }
+
+    .settings-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .settings-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .settings-item label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #85888c;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .settings-item input[type="text"],
+    .settings-item input[type="number"] {
+      background: #0b0c0e;
+      border: 1px solid #2d2e33;
+      border-radius: 8px;
+      padding: 12px;
+      color: white;
+      font-family: var(--font-family);
+      font-size: 16px;
+      outline: none;
+    }
+
+    .settings-item input[type="range"] {
+      accent-color: var(--btn-accent-bg);
+      cursor: pointer;
+    }
+
+    .settings-slider-val {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--btn-accent-bg);
+      align-self: flex-end;
+      margin-top: -4px;
+    }
+
+    .settings-save-btn {
+      background-color: var(--btn-accent-bg);
+      color: var(--btn-accent-text);
+      font-family: var(--font-family);
+      border: none;
+      border-radius: 100px;
+      padding: 16px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      margin-top: auto;
+      transition: opacity 0.2s;
+    }
+
+    .settings-save-btn:active {
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body>
@@ -192,6 +292,36 @@
     <button class="btn equals" onclick="pressEquals()">=</button>
   </div>
 
+  <!-- SETTINGS OVERLAY -->
+  <div id="settings-overlay">
+    <h2 class="settings-title">Settings</h2>
+    
+    <div class="settings-group">
+      <div class="settings-item">
+        <label>Default Prediction</label>
+        <input type="text" id="opt-default-prediction" value="5" placeholder="e.g. 5">
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-item">
+        <label>Reveal Delay (Seconds)</label>
+        <input type="range" id="opt-delay" min="0" max="10" step="0.5" value="3" oninput="updateSliderText('opt-delay', 'lbl-delay', 's')">
+        <span class="settings-slider-val" id="lbl-delay">3s</span>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-item">
+        <label>Accelerometer Sensitivity</label>
+        <input type="range" id="opt-sensitivity" min="0.5" max="5.0" step="0.1" value="1.5" oninput="updateSliderText('opt-sensitivity', 'lbl-sensitivity', '')">
+        <span class="settings-slider-val" id="lbl-sensitivity">1.5</span>
+      </div>
+    </div>
+
+    <button class="settings-save-btn" onclick="saveSettings()">Save &amp; Close</button>
+  </div>
+
   <script>
     // PWA Service Worker Registration
     if ('serviceWorker' in navigator) {
@@ -202,14 +332,19 @@
       });
     }
 
+    // INITIALIZE OPTIONS FROM LOCALSTORAGE OR DEFAULTS
+    let defaultPrediction = localStorage.getItem('magic_defaultPrediction') || '5';
+    let motionThreshold = parseFloat(localStorage.getItem('magic_motionThreshold')) || 1.5;
+    let revealDelay = parseFloat(localStorage.getItem('magic_revealDelay')) || 3.0; // in seconds
+
     // CALCULATOR STATE
     let currentInput = '0';
     let storedExpression = '';
     let isEvaluated = false;
 
     // MAGIC STATE
-    let magicPrediction = '5';
-    let tempPrediction = '5';
+    let magicPrediction = defaultPrediction;
+    let tempPrediction = defaultPrediction;
     let magicPrimed = false;
     let magicSequence = [];
     const SECRET_PATTERN = ['/', '*', '-', '+'];
@@ -304,6 +439,14 @@
     function pressEquals() {
       triggerHaptic();
       requestAccelerometerPermission();
+      
+      // Check for hidden settings code 3504
+      if (storedExpression === '' && currentInput === '3504') {
+        openSettings();
+        currentInput = '0';
+        updateDisplay();
+        return;
+      }
       
       if (storedExpression === '' || isEvaluated) return;
 
@@ -421,8 +564,6 @@
     }
 
     // MOTION AND SENSORS (ACCELEROMETER)
-    // Threshold reduced to 1.5 for extremely sensitive movement detection
-    const MOTION_THRESHOLD = 1.5; 
     let lastX = null, lastY = null, lastZ = null;
 
     function requestAccelerometerPermission() {
@@ -468,7 +609,7 @@
         
         let totalChange = deltaX + deltaY + deltaZ;
 
-        if (totalChange > MOTION_THRESHOLD) {
+        if (totalChange > motionThreshold) {
           // Phone movement detected!
           triggerMagicCountdown();
         }
@@ -490,10 +631,10 @@
       motionTriggered = true;
       magicPrimed = false; // Disable further motion triggers
       
-      // Start 3 second countdown silently
+      // Start countdown silently
       setTimeout(() => {
         revealMagicPrediction();
-      }, 3000);
+      }, revealDelay * 1000);
     }
 
     function revealMagicPrediction() {
@@ -517,6 +658,52 @@
       
       // Remove class to animate sliding back in from right to left
       resultEl.classList.remove('slide-out');
+    }
+
+    // SETTINGS OVERLAY LOGIC
+    const settingsOverlayEl = document.getElementById('settings-overlay');
+    
+    function updateSliderText(sliderId, labelId, unit) {
+      const val = document.getElementById(sliderId).value;
+      document.getElementById(labelId).innerText = val + unit;
+    }
+
+    function openSettings() {
+      // Load current option values to settings inputs
+      document.getElementById('opt-default-prediction').value = defaultPrediction;
+      document.getElementById('opt-delay').value = revealDelay;
+      document.getElementById('lbl-delay').innerText = revealDelay + 's';
+      document.getElementById('opt-sensitivity').value = motionThreshold;
+      document.getElementById('lbl-sensitivity').innerText = motionThreshold;
+
+      settingsOverlayEl.classList.add('visible');
+    }
+
+    function saveSettings() {
+      // Save input values
+      defaultPrediction = document.getElementById('opt-default-prediction').value || '5';
+      revealDelay = parseFloat(document.getElementById('opt-delay').value) || 3.0;
+      motionThreshold = parseFloat(document.getElementById('opt-sensitivity').value) || 1.5;
+
+      // Save to LocalStorage
+      localStorage.setItem('magic_defaultPrediction', defaultPrediction);
+      localStorage.setItem('magic_revealDelay', revealDelay);
+      localStorage.setItem('magic_motionThreshold', motionThreshold);
+
+      // Reset magic prediction to new default
+      magicPrediction = defaultPrediction;
+      tempPrediction = defaultPrediction;
+      magicPrimed = false;
+      motionTriggered = false;
+
+      // Hide settings
+      settingsOverlayEl.classList.remove('visible');
+      
+      // Clear calculator display
+      currentInput = '0';
+      storedExpression = '';
+      isEvaluated = false;
+      updateDisplay();
     }
   </script>
 </body>
