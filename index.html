@@ -77,14 +77,23 @@
       color: var(--display-text);
       text-align: right;
       width: 100%;
+      overflow: hidden; /* Hide scrollbars during offscreen slide transitions */
       white-space: nowrap;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scrollbar-width: none; /* Hide scrollbar for Firefox */
     }
     
-    .result-display::-webkit-scrollbar {
-      display: none; /* Hide scrollbar for Safari/Chrome */
+    /* Result text transitions directly inside the calculator screen */
+    #result {
+      display: inline-block;
+      transition: transform 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.12), opacity 0.65s ease;
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    /* Secretly moves it off-screen to the right instantly before sliding in */
+    #result.slide-out {
+      transform: translateX(100vw);
+      opacity: 0;
+      transition: none !important;
     }
 
     /* KEYBOARD SECTION */
@@ -138,45 +147,6 @@
       color: var(--btn-accent-text);
       font-size: 32px;
     }
-
-    /* MAGIC REVEAL OVERLAY */
-    #magic-overlay {
-      position: fixed;
-      inset: 0;
-      background-color: rgba(11, 12, 14, 0.96); /* Matches phone background */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.4s ease;
-    }
-
-    #magic-overlay.visible {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .revealed-number {
-      font-size: 110px;
-      font-weight: 700;
-      color: var(--display-text);
-      text-align: center;
-      /* Offscreen starting state (thrown from top-right) */
-      transform: translate(150vw, -150vh) rotate(60deg) scale(0.2);
-      transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.15); /* Overshoot bounce */
-      filter: drop-shadow(0 15px 30px rgba(0,0,0,0.5));
-    }
-
-    #magic-overlay.visible .revealed-number {
-      transform: translate(0, 0) rotate(0deg) scale(1);
-    }
-
-    /* Extra styling for OnePlus look */
-    .op-brand-dot {
-      color: var(--btn-accent-bg);
-    }
   </style>
 </head>
 <body>
@@ -184,7 +154,9 @@
   <!-- DISPLAY -->
   <div class="display-container">
     <div class="expression-display" id="expression"></div>
-    <div class="result-display" id="result">0</div>
+    <div class="result-display">
+      <span id="result">0</span>
+    </div>
   </div>
 
   <!-- KEYBOARD -->
@@ -220,11 +192,6 @@
     <button class="btn equals" onclick="pressEquals()">=</button>
   </div>
 
-  <!-- REVEAL SCREEN -->
-  <div id="magic-overlay" onclick="dismissReveal()">
-    <div class="revealed-number" id="reveal-text">7</div>
-  </div>
-
   <script>
     // PWA Service Worker Registration
     if ('serviceWorker' in navigator) {
@@ -250,8 +217,6 @@
 
     const exprEl = document.getElementById('expression');
     const resultEl = document.getElementById('result');
-    const overlayEl = document.getElementById('magic-overlay');
-    const revealTextEl = document.getElementById('reveal-text');
 
     // Vibration feedback helper (OnePlus style haptic feel)
     function triggerHaptic() {
@@ -368,9 +333,12 @@
       updateDisplay();
     }
 
+    // Manual clear resets animation and states
     function pressClear() {
       triggerHaptic();
       requestAccelerometerPermission();
+      
+      // Instantly clear display
       currentInput = '0';
       storedExpression = '';
       isEvaluated = false;
@@ -448,7 +416,8 @@
     }
 
     // MOTION AND SENSORS (ACCELEROMETER)
-    const MOTION_THRESHOLD = 15; // Calibration trigger sensitivity
+    // Threshold reduced to 1.5 for extremely sensitive movement detection
+    const MOTION_THRESHOLD = 1.5; 
     let lastX = null, lastY = null, lastZ = null;
 
     function requestAccelerometerPermission() {
@@ -523,28 +492,26 @@
     }
 
     function revealMagicPrediction() {
-      // Set value inside reveal element
-      revealTextEl.innerText = magicPrediction;
-      
-      // Make overlay visible to trigger CSS fly-in animation
-      overlayEl.classList.add('visible');
-      
-      // Vibrate phone once heavily on reveal (if supported)
+      // Set current input state directly in the calculator
+      currentInput = magicPrediction;
+      isEvaluated = true; // Ready for subsequent calculations
+
+      // Vibrate phone heavily on reveal (if supported)
       if (navigator.vibrate) {
         navigator.vibrate([100, 50, 100]);
       }
-    }
 
-    function dismissReveal() {
-      // Silently dismiss
-      overlayEl.classList.remove('visible');
+      // Slide result off-screen to the right instantly
+      resultEl.classList.add('slide-out');
       
-      // Reset variables so it is completely clean
-      magicPrimed = false;
-      motionTriggered = false;
-      currentInput = '0';
-      storedExpression = '';
+      // Force layout recalculation
+      resultEl.offsetHeight; 
+      
+      // Update result display text and fonts
       updateDisplay();
+      
+      // Remove class to animate sliding back in from right to left
+      resultEl.classList.remove('slide-out');
     }
   </script>
 </body>
