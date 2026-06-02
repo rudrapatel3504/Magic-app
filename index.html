@@ -208,7 +208,8 @@
     let isEvaluated = false;
 
     // MAGIC STATE
-    let magicPrediction = '7';
+    let magicPrediction = '5';
+    let tempPrediction = '5';
     let magicPrimed = false;
     let magicSequence = [];
     const SECRET_PATTERN = ['/', '*', '-', '+'];
@@ -385,6 +386,12 @@
 
     // MAGIC LOGIC TRACKING
     function trackMagicSequence(op) {
+      // If starting sequence, capture prediction
+      if (op === '/') {
+        let parsedVal = parseFloat(currentInput.replace(/,/g, ''));
+        tempPrediction = (!isNaN(parsedVal) && parsedVal !== 0) ? currentInput : '5';
+      }
+
       magicSequence.push(op);
       
       // Only keep the last N operators matching pattern length
@@ -395,9 +402,7 @@
       // Check if secret sequence matches
       if (JSON.stringify(magicSequence) === JSON.stringify(SECRET_PATTERN)) {
         // Activate Magic!
-        // Grab current typed value in calculator (or default to 7 if empty/0)
-        let parsedVal = parseFloat(currentInput.replace(/,/g, ''));
-        magicPrediction = (!isNaN(parsedVal) && parsedVal !== 0) ? currentInput : '7';
+        magicPrediction = tempPrediction;
         
         // Prime the trick silently
         magicPrimed = true;
