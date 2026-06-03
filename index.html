@@ -322,6 +322,14 @@
 
     <div class="settings-group">
       <div class="settings-item">
+        <label>Setup Delay (Seconds)</label>
+        <input type="range" id="opt-setup-delay" min="0" max="15" step="1" value="5" oninput="updateSliderText('opt-setup-delay', 'lbl-setup-delay', 's')">
+        <span class="settings-slider-val" id="lbl-setup-delay">5s</span>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-item">
         <label>Accelerometer Sensitivity</label>
         <input type="range" id="opt-sensitivity" min="0.5" max="5.0" step="0.1" value="1.5" oninput="updateSliderText('opt-sensitivity', 'lbl-sensitivity', '')">
         <span class="settings-slider-val" id="lbl-sensitivity">1.5</span>
@@ -345,6 +353,7 @@
     let defaultPrediction = localStorage.getItem('magic_defaultPrediction') || '5';
     let motionThreshold = parseFloat(localStorage.getItem('magic_motionThreshold')) || 1.5;
     let revealDelay = parseFloat(localStorage.getItem('magic_revealDelay')) || 3.0; // in seconds
+    let setupDelay = parseFloat(localStorage.getItem('magic_setupDelay')) || 5.0; // in seconds
 
     // CALCULATOR STATE
     let currentInput = '0';
@@ -359,6 +368,7 @@
     const SECRET_PATTERN = ['/', '*', '-', '+'];
     let motionTriggered = false;
     let accelerometerGranted = false;
+    let primingTimeout = null;
 
     const exprEl = document.getElementById('expression');
     const resultEl = document.getElementById('result');
@@ -510,6 +520,12 @@
       storedExpression = '';
       isEvaluated = false;
       magicSequence = []; // Reset pattern tracker on manual clear
+      magicPrimed = false;
+      motionTriggered = false;
+      if (primingTimeout) {
+        clearTimeout(primingTimeout);
+        primingTimeout = null;
+      }
       updateDisplay();
     }
 
@@ -570,9 +586,24 @@
         // Activate Magic!
         magicPrediction = tempPrediction;
         
-        // Prime the trick silently
-        magicPrimed = true;
+        // Cancel any existing priming timeout
+        if (primingTimeout) {
+          clearTimeout(primingTimeout);
+          primingTimeout = null;
+        }
+
+        // Reset state and wait for setup delay before priming
         motionTriggered = false;
+        magicPrimed = false;
+
+        primingTimeout = setTimeout(() => {
+          magicPrimed = true;
+          // Reset motion baseline to prevent instant trigger from old readings
+          lastX = null;
+          lastY = null;
+          lastZ = null;
+          primingTimeout = null;
+        }, setupDelay * 1000);
         
         // Silently clear display to hide what just happened
         currentInput = '0';
@@ -699,6 +730,8 @@
       document.getElementById('opt-default-prediction').value = defaultPrediction;
       document.getElementById('opt-delay').value = revealDelay;
       document.getElementById('lbl-delay').innerText = revealDelay + 's';
+      document.getElementById('opt-setup-delay').value = setupDelay;
+      document.getElementById('lbl-setup-delay').innerText = setupDelay + 's';
       document.getElementById('opt-sensitivity').value = motionThreshold;
       document.getElementById('lbl-sensitivity').innerText = motionThreshold;
 
@@ -709,11 +742,13 @@
       // Save input values
       defaultPrediction = document.getElementById('opt-default-prediction').value || '5';
       revealDelay = parseFloat(document.getElementById('opt-delay').value) || 3.0;
+      setupDelay = parseFloat(document.getElementById('opt-setup-delay').value) || 5.0;
       motionThreshold = parseFloat(document.getElementById('opt-sensitivity').value) || 1.5;
 
       // Save to LocalStorage
       localStorage.setItem('magic_defaultPrediction', defaultPrediction);
       localStorage.setItem('magic_revealDelay', revealDelay);
+      localStorage.setItem('magic_setupDelay', setupDelay);
       localStorage.setItem('magic_motionThreshold', motionThreshold);
 
       // Reset magic prediction to new default
@@ -721,6 +756,10 @@
       tempPrediction = defaultPrediction;
       magicPrimed = false;
       motionTriggered = false;
+      if (primingTimeout) {
+        clearTimeout(primingTimeout);
+        primingTimeout = null;
+      }
 
       // Hide settings
       settingsOverlayEl.classList.remove('visible');
