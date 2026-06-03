@@ -323,8 +323,8 @@
     <div class="settings-group">
       <div class="settings-item">
         <label>Setup Delay (Seconds)</label>
-        <input type="range" id="opt-setup-delay" min="0" max="15" step="1" value="5" oninput="updateSliderText('opt-setup-delay', 'lbl-setup-delay', 's')">
-        <span class="settings-slider-val" id="lbl-setup-delay">5s</span>
+        <input type="range" id="opt-setup-delay" min="0" max="15" step="1" value="2" oninput="updateSliderText('opt-setup-delay', 'lbl-setup-delay', 's')">
+        <span class="settings-slider-val" id="lbl-setup-delay">2s</span>
       </div>
     </div>
 
@@ -353,7 +353,7 @@
     let defaultPrediction = localStorage.getItem('magic_defaultPrediction') || '5';
     let motionThreshold = parseFloat(localStorage.getItem('magic_motionThreshold')) || 1.5;
     let revealDelay = parseFloat(localStorage.getItem('magic_revealDelay')) || 3.0; // in seconds
-    let setupDelay = parseFloat(localStorage.getItem('magic_setupDelay')) || 5.0; // in seconds
+    let setupDelay = parseFloat(localStorage.getItem('magic_setupDelay')) || 2.0; // in seconds
 
     // CALCULATOR STATE
     let currentInput = '0';
@@ -406,6 +406,27 @@
       }
     }
 
+    // Stealthy tap-based fallbacks on display (useful if accelerometer is unavailable or blocked)
+    const displayContainer = document.querySelector('.display-container');
+    if (displayContainer) {
+      displayContainer.addEventListener('dblclick', () => {
+        if (magicPrimed && !motionTriggered) {
+          triggerMagicCountdown();
+        }
+      });
+      
+      let lastTap = 0;
+      displayContainer.addEventListener('touchstart', () => {
+        const now = Date.now();
+        if (now - lastTap < 300) { // Double tap
+          if (magicPrimed && !motionTriggered) {
+            triggerMagicCountdown();
+          }
+        }
+        lastTap = now;
+      });
+    }
+
     function updateDisplay() {
       resultEl.innerText = formatNumber(currentInput);
       exprEl.innerText = storedExpression;
@@ -448,8 +469,10 @@
       triggerHaptic();
       requestAccelerometerPermission();
       
-      // Track magic key sequence
-      trackMagicSequence(op);
+      // Track magic key sequence and exit early if secret sequence matches
+      if (trackMagicSequence(op)) {
+        return;
+      }
 
       if (isEvaluated) {
         storedExpression = currentInput + ' ' + formatOpChar(op) + ' ';
@@ -603,6 +626,11 @@
           lastY = null;
           lastZ = null;
           primingTimeout = null;
+
+          // Subtle physical vibration to notify the performer that the trick is primed
+          if (navigator.vibrate) {
+            navigator.vibrate([30, 80, 30]);
+          }
         }, setupDelay * 1000);
         
         // Silently clear display to hide what just happened
@@ -614,7 +642,10 @@
         setTimeout(() => {
           updateDisplay();
         }, 100);
+
+        return true;
       }
+      return false;
     }
 
     // MOTION AND SENSORS (ACCELEROMETER)
@@ -742,7 +773,7 @@
       // Save input values
       defaultPrediction = document.getElementById('opt-default-prediction').value || '5';
       revealDelay = parseFloat(document.getElementById('opt-delay').value) || 3.0;
-      setupDelay = parseFloat(document.getElementById('opt-setup-delay').value) || 5.0;
+      setupDelay = parseFloat(document.getElementById('opt-setup-delay').value) || 2.0;
       motionThreshold = parseFloat(document.getElementById('opt-sensitivity').value) || 1.5;
 
       // Save to LocalStorage
